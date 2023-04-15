@@ -29,6 +29,12 @@ class Result:
 
         return Response(self.err_message, status_code=400)
 
+    @property
+    def only_code(self):
+        if self.is_ok:
+            return Response(status_code=200)
+        return self.response
+
     def match(self, ok_fn, err_fn=None):
         if self.is_ok:
             return ok_fn(self.value)

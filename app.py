@@ -9,6 +9,7 @@ from src.common.result import Result
 from src.entities.room import Room
 from src.schema import *
 from src.services.answer import AnswerService
+from src.services.question import QuestionService
 
 # from src.containers import Container
 from src.services.room import RoomService
@@ -28,14 +29,16 @@ class Container(DeclarativeContainer):
     # config = Configuration()
     connections = Singleton(Connections)
     token_service = Singleton(TokenService)
-    room_service = Singleton(RoomService)
-    answer_service = Singleton(AnswerService)
+    room_service = Singleton(RoomService, token_service=token_service)
+    question_service = Singleton(QuestionService, room_service=room_service)
+    answer_service = Singleton(AnswerService, room_service=room_service, question_server=question_service,
+                               connections=connections)
 
 
 app = FastAPI()
 
 
-@app.post("/rooms/create", response_model=RoomAndUserToken)
+@app.post("/rooms/create", response_model=RoomUserToken)
 @inject
 async def create_room(master_name: str,
                       room_service: RoomService = Depends(Provide[Container.room_service])):
@@ -43,7 +46,7 @@ async def create_room(master_name: str,
     return result.response
 
 
-@app.post("/rooms/join", response_model=RoomAndUserToken)
+@app.post("/rooms/join", response_model=RoomUserToken)
 @inject
 async def join_room(input: JoinRoom,
                     room_service: RoomService = Depends(Provide[Container.room_service])):
@@ -62,7 +65,7 @@ async def leave_room(input: LeaveRoom,
 @inject
 async def start_room(input: StartRoom,
                      room_service: RoomService = Depends(Provide[Container.room_service])):
-    return room_service.start_room(input.room_code, input.master_code).response
+    return room_service.start_room(input.room_code, input.master_token).only_code
 
 
 @app.post("/question/answer")

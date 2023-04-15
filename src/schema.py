@@ -7,7 +7,7 @@ from src.entities.room import RoomStatus, Room
 
 class StartRoom(BaseModel):
     room_code: str
-    master_code: str
+    master_token: str
 
 
 class JoinRoom(BaseModel):
@@ -49,9 +49,10 @@ class UserToken(UserSchema):
     token: str
 
 
-class RoomAndUserToken(BaseModel):
+class RoomUserToken(BaseModel):
     room: RoomSchema
-    user: UserToken
+    user: UserSchema
+    token: str
 
 
 class SubmitAnswer(BaseModel):

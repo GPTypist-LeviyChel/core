@@ -6,10 +6,11 @@ from dataclasses import asdict
 from src.common.result import Result
 from src.entities.room import Room, RoomStatus
 from src.entities.user import User
+from src.services.token import TokenService
 
 
 class RoomService:
-    def __init__(self):
+    def __init__(self, token_service: TokenService):
         self.rooms: dict[str, Room] = {}
         self._codes = set()
 
@@ -18,6 +19,8 @@ class RoomService:
 
         self._codes = list(self._codes)
         random.shuffle(self._codes)
+
+        self.token_service = token_service
 
     def _gen_room_code(self) -> str:
         return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -33,7 +36,7 @@ class RoomService:
             return Result.error("Игра уже закончилась")
         return None
 
-    def join_room(self, room_code: str, user_name: str, profile_pic: int, master_token: str = None) -> Result:
+    def join_room(self, room_code: str, user_name: str, profile_pic: int, master_token: str = False) -> Result:
         room = self.rooms.get(room_code, None)
         if room is None:
             return self._bad_room
@@ -55,8 +58,10 @@ class RoomService:
         if len(user_name) > 100:
             return Result.error("Имя должно быть не длиннее 100 символов")
 
-        room.users[user_name] = User(user_name, profile_pic, master_token=master_token)
-        return Result.ok({"room": asdict(room), "user": asdict(room.users[user_name])})
+        room.users[user_name] = User(user_name, profile_pic, is_master=master_token is not None)
+        token = master_token or self.token_service.create(user_name)
+
+        return Result.ok({"room": asdict(room), "user": asdict(room.users[user_name]), "token": token})
 
     def leave_room(self, room_code: str, user_name: str) -> Result:
         room = self.rooms.get(room_code, None)
@@ -68,7 +73,7 @@ class RoomService:
 
         return Result.ok()
 
-    def start_room(self, room_code: str, master_code: str) -> Result:
+    def start_room(self, room_code: str, master_token: str) -> Result:
         room = self.rooms.get(room_code, None)
         if room is None:
             return self._bad_room
@@ -77,7 +82,7 @@ class RoomService:
         if wrong_status:
             return wrong_status
 
-        if room.master_code != master_code:
+        if room.master_token != master_token:
             return Result.error("Ошибка авторизации")
 
         room.status = RoomStatus.IN_PROGRESS
