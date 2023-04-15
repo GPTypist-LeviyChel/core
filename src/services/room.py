@@ -40,7 +40,7 @@ class RoomService:
             return Result.error("Игра уже закончилась")
         return None
 
-    def join_room(self, room_code: str, user_name: str, profile_pic: int, master_token: str = False) -> Result:
+    async def join_room(self, room_code: str, user_name: str, master_token: str = None) -> Result:
         room = self.rooms.get(room_code, None)
         if room is None:
             return self._bad_room
@@ -62,14 +62,16 @@ class RoomService:
         if len(user_name) > 100:
             return Result.error("Имя должно быть не длиннее 100 символов")
 
-        room.users[user_name] = User(user_name, profile_pic, is_master=master_token is not None)
+        room.users[user_name] = User(user_name, 'asdas', is_master=master_token is not None)
         token = master_token or self.token_service.create(user_name)
 
-        self.connections.notify_all(room_code, user_name,
-                                    make_event(EventType.USER_JOINED, {"name": user_name, "profile_pic": profile_pic}))
+        await self.connections.notify_all(room_code, user_name,
+                                          make_event(EventType.USER_JOINED,
+                                                     {"name": user_name, "profile_pic": 'asdas',
+                                                      "is_master": False}))
         return Result.ok({"room": asdict(room), "user": asdict(room.users[user_name]), "token": token})
 
-    def leave_room(self, room_code: str, user_name: str) -> Result:
+    async def leave_room(self, room_code: str, user_name: str) -> Result:
         room = self.rooms.get(room_code, None)
         if room is None:
             return self._bad_room
@@ -77,17 +79,18 @@ class RoomService:
         if user_name in room.users:
             room.users.pop(user_name)
 
-        self.connections.notify_all(room_code, user_name, make_event(EventType.USER_LEFT, {"name": user_name}))
+        await self.connections.notify_all(room_code, user_name, make_event(EventType.USER_LEFT, {"name": user_name}))
 
         if not room.users:
-            self.rooms.pop(room_code)
-            self._codes.append(room_code)
+            if room_code in self.rooms:
+                self.rooms.pop(room_code)
+                self._codes.append(room_code)
         elif room.users[user_name].is_master:
-            return self.end_room(room_code)
+            return await self.end_room(room_code)
 
         return Result.ok()
 
-    def start_room(self, room_code: str, master_token: str) -> Result:
+    async def start_room(self, room_code: str, master_token: str) -> Result:
         room = self.rooms.get(room_code, None)
         if room is None:
             return self._bad_room
@@ -101,30 +104,37 @@ class RoomService:
 
         room.status = RoomStatus.IN_PROGRESS
 
-        self.connections.notify_all(room_code, None, make_event(EventType.GAME_STARTED, {}))
+        await self.connections.notify_all(room_code, None, make_event(EventType.GAME_STARTED, {}))
 
         return Result.ok()
 
-    def create_room(self, master_name: str) -> Result:
+    async def create_room(self, master_name: str, questions_per_user: int) -> Result:
         if not self._codes:
             return Result.error("Пока нет свободных комнат")
 
+        master_name = master_name.strip()
+        if not master_name:
+            return Result.error("Имя должно быть непустым")
+
+        if questions_per_user < 1:
+            return Result.error("Количество вопросов должно быть больше 0")
+
         code = self._codes[-1]
-        code = 'AAAAAA'
-        room = Room(code)
+        master_token = self.token_service.create(master_name)
+        room = Room(code, questions_per_user=questions_per_user, master_token=master_token)
         self.rooms[code] = room
 
         # 0 - master pic
-        result = self.join_room(code, master_name, 0, master_token=room.master_token)
+        result = await self.join_room(code, master_name, master_token=master_token)
         if result.is_error:
             return result
 
-        self.master_verify.set_master(code, master_name)
+        self.master_verify.set_master(code, master_token)
         self._codes.pop()
 
         return result
 
-    def end_room(self, room_code: str) -> Result:
+    async def end_room(self, room_code: str) -> Result:
         room = self.get_room(room_code)
         if room.is_error:
             return room
@@ -134,7 +144,7 @@ class RoomService:
         self._codes.append(room.code)
         self.rooms.pop(room_code)
 
-        self.connections.notify_all(room_code, None, make_event(EventType.GAME_ENDED, {}))
+        await self.connections.notify_all(room_code, None, make_event(EventType.GAME_ENDED, {}))
 
         return Result.ok()
 

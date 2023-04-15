@@ -11,7 +11,12 @@ class Connections:
     def remove_ws_connection(self, ws, room_code: str):
         self._connections[room_code].remove(ws)
 
-    def notify_all(self, room_code: str, sender: str | None, payload: dict):
+    async def notify_all(self, room_code: str, sender: str | None, payload: dict):
+        print('notify_all', room_code, sender, payload)
+
         for ws in self._connections[room_code]:
             payload["sender"] = sender
-            ws.send_json(payload)
+            try:
+                await ws.send_json(payload)
+            except Exception as e:
+                pass

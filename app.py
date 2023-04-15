@@ -3,7 +3,9 @@ import json
 import sys
 
 from fastapi import FastAPI, Depends
-from starlette.responses import Response
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response, JSONResponse
 from starlette.websockets import WebSocket
 
 from src.common.result import Result
@@ -39,12 +41,22 @@ class Container(DeclarativeContainer):
 
 app = FastAPI()
 
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.post("/rooms/create", response_model=RoomUserToken)
 @inject
-async def create_room(master_name: str,
+async def create_room(input: CreateRoom,
                       room_service: RoomService = Depends(Provide[Container.room_service])):
-    result = room_service.create_room(master_name)
+    result = await room_service.create_room(input.master_name, input.questions_per_user or 1)
     return result.response
 
 
@@ -52,7 +64,7 @@ async def create_room(master_name: str,
 @inject
 async def join_room(input: JoinRoom,
                     room_service: RoomService = Depends(Provide[Container.room_service])):
-    result = room_service.join_room(input.room_code, input.user_name, input.profile_pic)
+    result = await room_service.join_room(input.room_code, input.user_name)
     return result.response
 
 
@@ -60,49 +72,88 @@ async def join_room(input: JoinRoom,
 @inject
 async def leave_room(input: LeaveRoom,
                      room_service: RoomService = Depends(Provide[Container.room_service])):
-    return room_service.leave_room(input.room_code, input.user_name).response
+    return (await room_service.leave_room(input.room_code, input.user_name)).response
 
 
 @app.post("/rooms/start")
 @inject
 async def start_room(input: StartRoom,
-                     room_service: RoomService = Depends(Provide[Container.room_service])):
-    return room_service.start_room(input.room_code, input.master_token).only_code
+                     question_service: QuestionService = Depends(Provide[Container.question_service])):
+    return (await question_service.start_game(input.room_code, input.master_token)).response
 
 
 @app.post("/question/answer")
 @inject
 async def submit_answer(input: SubmitAnswer,
-                        token_service: TokenService = Depends(Provide[Container.token_service]),
                         question_service: QuestionService = Depends(Provide[Container.question_service])):
-    user = token_service.get_user(input.token)
-    if user is None:
-        return Result.error('Invalid token')
-    return question_service.submit_answer(input.room_code, input.token, input.answer).response
+    return (await question_service.submit_answer(input.room_code, input.token, input.answer)).response
+
+
+@app.post("/question/next")
+@inject
+async def next_question(input: NextQuestion,
+                        question_service: QuestionService = Depends(Provide[Container.question_service])):
+    return (await question_service.next_question(input.room_code, input.token)).response
+
+
+@app.post("/question/like")
+@inject
+async def like_answer(input: LikeAnswer,
+                      question_service: QuestionService = Depends(Provide[Container.question_service])):
+    return (await question_service.like_answer(input.room_code, input.token)).response
+
+
+@app.post("/question/dislike")
+@inject
+async def like_answer(input: LikeAnswer,
+                      question_service: QuestionService = Depends(Provide[Container.question_service])):
+    return (await question_service.dislike_answer(input.room_code, input.token)).response
+
+
+# join room by code
+@app.get('/{room_code: [A-Z0-9]{6}')
+async def join_room_by_code(room_code: str):
+    return JSONResponse({'room_code': room_code})
 
 
 @app.websocket('/ws')
 @inject
 async def websocket_endpoint(websocket: WebSocket,
                              token_service: TokenService = Depends(Provide[Container.token_service]),
+                             room_service: RoomService = Depends(Provide[Container.room_service]),
                              connections: Connections = Depends(Provide[Container.connections])):
     await websocket.accept()
-
     room_code = websocket.query_params.get('room_code')
+    user_name = websocket.query_params.get('user_name')
+    if not room_code or not user_name:
+        await websocket.close()
+        return
+
+    room_code = room_code.strip().upper()
+    user_name = user_name.strip()
+
+    if not room_code or not user_name:
+        await websocket.close()
+        return
+
     connections.add_ws_connection(websocket, room_code)
 
     while True:
         try:
             data = await websocket.receive_text()
         except Exception as e:
+            await room_service.leave_room(room_code, user_name)
             connections.remove_ws_connection(websocket, room_code)
+            print('exception', e)
             return
-        if data == 'exit':
+
+        if data == 'pong':
+            await asyncio.sleep(1)
+            await websocket.send_json({'type': 0})
+        else:
+            await room_service.leave_room(room_code, user_name)
             connections.remove_ws_connection(websocket, room_code)
             break
-        else:
-            # sleep for 1 second
-            await asyncio.sleep(1)
 
 
 container = Container()

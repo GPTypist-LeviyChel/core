@@ -5,6 +5,11 @@ from pydantic import BaseModel
 from src.entities.room import RoomStatus, Room
 
 
+class CreateRoom(BaseModel):
+    master_name: str
+    questions_per_user: int
+
+
 class StartRoom(BaseModel):
     room_code: str
     master_token: str
@@ -13,7 +18,6 @@ class StartRoom(BaseModel):
 class JoinRoom(BaseModel):
     room_code: str
     user_name: str
-    profile_pic: int
 
 
 class LeaveRoom(BaseModel):
@@ -23,7 +27,7 @@ class LeaveRoom(BaseModel):
 
 class UserSchema(BaseModel):
     name: str
-    profile_pic: int
+    profile_pic: str
     is_master: bool
 
 
@@ -61,6 +65,16 @@ class SubmitAnswer(BaseModel):
     answer: str
 
 
+class LikeAnswer(BaseModel):
+    room_code: str
+    token: str
+
+
+class NextQuestion(BaseModel):
+    room_code: str
+    token: str
+
+
 class EventType(IntEnum):
     USER_JOINED = 1
     USER_LEFT = 2
@@ -70,6 +84,8 @@ class EventType(IntEnum):
 
     ANSWER_SUBMITTED = 8
     NEXT_QUESTION = 9
+
+    LIKES_CHANGED = 11
 
 
 def make_event(event_type: EventType, payload: dict):

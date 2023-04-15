@@ -25,22 +25,35 @@ class QuestionService:
         self.master_verify = master_verify
         self.connections = connections
 
-    def init_room_questions(self, room_code: str, count: int):
+    def init_room_questions(self, room_code: str):
         room = self.room_service.get_room(room_code)
         if room.is_error:
             return room
 
         room = room.value
+        room.questions_per_user = 5
         room.questions = [Question(''.join(random.choices(string.ascii_uppercase + string.digits, k=10)),
                                    QuestionType.MULTIPLE_CHOICE, ['a', 'b', 'c', 'd'])
-                          for _ in range(count)]
+                          for _ in range(len(room.users) * room.questions_per_user)]
         room.current_question = -1
 
-        user_names = list(room.users.keys())
-        random.shuffle(user_names)
-        self._orders[room_code] = user_names
+        user_names = list(room.users.keys()) * room.questions_per_user
 
-    def next_question(self, room_code: str, master_token: str) -> Result:
+        while True:
+            random.shuffle(user_names)
+            break
+            # TODO:
+
+            for i in range(1, len(user_names)):
+                if user_names[i - 1] == user_names[i]:
+                    break
+            else:
+                break
+
+        self._orders[room_code] = user_names
+        return Result.ok()
+
+    async def next_question(self, room_code: str, master_token: str) -> Result:
         if not self.master_verify.is_master(room_code, master_token):
             return Result.error("Invalid master token")
 
@@ -50,20 +63,25 @@ class QuestionService:
 
         room = room.value
         room.current_question += 1
+        room.current_answer = None
+        room.disliked_by.clear()
+        room.liked_by.clear()
+
         if room.current_question >= len(room.questions):
-            self.connections.notify_all(room_code, None, make_event(EventType.GAME_ENDED, {}))
-            return Result.ok('end')
+            await self.connections.notify_all(room_code, None, make_event(EventType.GAME_ENDED, {}))
+            return Result.ok()
 
         question = room.questions[room.current_question]
-        self.connections.notify_all(room_code, None, make_event(EventType.NEXT_QUESTION,
-                                                                {'question': question, "question_type": question.type,
-                                                                 "answers": question.answers,
-                                                                 "answerer": self._orders[room_code][
-                                                                     room.current_question]}))
+        await self.connections.notify_all(room_code, None, make_event(EventType.NEXT_QUESTION,
+                                                                      {'question': question.question,
+                                                                       "question_type": question.type,
+                                                                       "answers": question.answers,
+                                                                       "answerer": self._orders[room_code][
+                                                                           room.current_question]}))
 
-        return Result.ok('continue')
+        return Result.ok()
 
-    def submit_answer(self, room_code, token: str, answer: str):
+    async def submit_answer(self, room_code, token: str, answer: str):
         user_name = self.token_service.get_user(token)
         if user_name is None:
             return Result.error("Invalid token")
@@ -84,6 +102,64 @@ class QuestionService:
             return Result.error('Room already has an answer')
 
         room.current_answer = answer
-        self.connections.notify_all(room_code, user_name, make_event(EventType.ANSWER_SUBMITTED, {"answer": answer}))
+        await self.connections.notify_all(room_code, user_name,
+                                          make_event(EventType.ANSWER_SUBMITTED, {"answer": answer}))
 
         return Result.ok()
+
+    async def start_game(self, room_code: str, master_token: str) -> Result:
+        res = await self.room_service.start_room(room_code, master_token)
+        if res.is_error:
+            return res
+
+        res = self.init_room_questions(room_code)
+        if res.is_error:
+            return res
+
+        return await self.next_question(room_code, master_token)
+
+    async def like_answer(self, room_code, token) -> Result:
+        user_name = self.token_service.get_user(token)
+        if user_name is None:
+            return Result.error("Invalid token")
+
+        room = self.room_service.get_room(room_code)
+        if room.is_error:
+            return room
+
+        room = room.value
+        if user_name not in room.users:
+            return Result.error('Invalid room')
+
+        if user_name in room.liked_by:
+            return Result.error('Already liked')
+
+        room.liked_by.add(user_name)
+        room.disliked_by.discard(user_name)
+
+        data = {"dislikes": len(room.disliked_by), "likes": len(room.liked_by)}
+        await self.connections.notify_all(room_code, user_name, make_event(EventType.LIKES_CHANGED, data))
+        return Result.ok(data)
+
+    async def dislike_answer(self, room_code, token):
+        user_name = self.token_service.get_user(token)
+        if user_name is None:
+            return Result.error("Invalid token")
+
+        room = self.room_service.get_room(room_code)
+        if room.is_error:
+            return room
+
+        room = room.value
+        if user_name not in room.users:
+            return Result.error('Invalid room')
+
+        if user_name in room.disliked_by:
+            return Result.error('Already disliked')
+
+        room.liked_by.discard(user_name)
+        room.disliked_by.add(user_name)
+
+        data = {"dislikes": len(room.disliked_by), "likes": len(room.liked_by)}
+        await self.connections.notify_all(room_code, user_name, make_event(EventType.LIKES_CHANGED, data))
+        return Result.ok(data)

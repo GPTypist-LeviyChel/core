@@ -1,4 +1,4 @@
-from starlette.responses import Response
+from starlette.responses import Response, JSONResponse
 
 
 class Result:
@@ -27,7 +27,7 @@ class Result:
         if self.is_ok:
             return self.value
 
-        return Response(self.err_message, status_code=400)
+        return JSONResponse(status_code=400, content={'error': self.err_message})
 
     @property
     def only_code(self):
