@@ -1,6 +1,7 @@
 import dataclasses
 import random
 import string
+from dataclasses import asdict
 
 from src.common.result import Result
 from src.entities.room import Room, RoomStatus
@@ -54,8 +55,8 @@ class RoomService:
         if len(user_name) > 100:
             return Result.error("Имя должно быть не длиннее 100 символов")
 
-        room.users[user_name] = User(len(room.users), user_name, profile_pic, master_token=master_token)
-        return Result.ok({"room": room, "user": room.users[user_name]})
+        room.users[user_name] = User(user_name, profile_pic, master_token=master_token)
+        return Result.ok({"room": asdict(room), "user": asdict(room.users[user_name])})
 
     def leave_room(self, room_code: str, user_name: str) -> Result:
         room = self.rooms.get(room_code, None)
@@ -92,13 +93,13 @@ class RoomService:
         self.rooms[code] = room
 
         # 0 - master pic
-        result = self.join_room(code, master_name, 0, master_token=room.master_code)
+        result = self.join_room(code, master_name, 0, master_token=room.master_token)
         if result.is_error:
             return result
 
         self._codes.pop()
 
-        return Result.ok(room)
+        return result
 
     def end_room(self, room_code: str) -> Result:
         room = self.rooms.get(room_code, None)

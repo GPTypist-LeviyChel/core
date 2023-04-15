@@ -1,3 +1,4 @@
+import json
 import sys
 
 from fastapi import FastAPI, Depends
@@ -20,6 +21,8 @@ from src.services.room import RoomService
 from src.services.token import TokenService
 from src.session.conenctions import Connections
 
+from dataclass_wizard import asdict
+
 
 class Container(DeclarativeContainer):
     # config = Configuration()
@@ -32,22 +35,20 @@ class Container(DeclarativeContainer):
 app = FastAPI()
 
 
-@app.post("/rooms/create", response_model=RoomSchema)
+@app.post("/rooms/create", response_model=RoomAndUserToken)
 @inject
 async def create_room(master_name: str,
                       room_service: RoomService = Depends(Provide[Container.room_service])):
     result = room_service.create_room(master_name)
-    return result.match(lambda res: res, lambda err: Response(err, status_code=400))
+    return result.response
 
 
-@app.post("/rooms/join", response_model=UserSchema)
+@app.post("/rooms/join", response_model=RoomAndUserToken)
 @inject
 async def join_room(input: JoinRoom,
                     room_service: RoomService = Depends(Provide[Container.room_service])):
     result = room_service.join_room(input.room_code, input.user_name, input.profile_pic)
-    return result.match(
-        lambda res: Response(res['user']),
-        lambda err: Response(err, status_code=400))
+    return result.response
 
 
 @app.post("/rooms/leave")

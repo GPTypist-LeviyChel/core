@@ -1,3 +1,5 @@
+import dataclasses
+
 from pydantic.validators import IntEnum
 
 
@@ -6,8 +8,8 @@ class QuestionType(IntEnum):
     SHORT_ANSWER = 1
 
 
+@dataclasses.dataclass
 class Question:
-    def __init__(self, question: str, type: QuestionType, answers: list[str] = None):
-        self.question = question
-        self.type = type
-        self.answers = answers
+    question: str
+    type: QuestionType
+    answers: list[str] | None = None

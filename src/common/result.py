@@ -29,7 +29,10 @@ class Result:
 
         return Response(self.err_message, status_code=400)
 
-    def match(self, ok_fn, err_fn):
+    def match(self, ok_fn, err_fn=None):
         if self.is_ok:
             return ok_fn(self.value)
+
+        if err_fn is None:
+            return self.response
         return err_fn(self.err_message)

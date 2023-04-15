@@ -2,7 +2,7 @@ from enum import Enum, IntEnum
 
 from pydantic import BaseModel
 
-from src.entities.room import RoomStatus
+from src.entities.room import RoomStatus, Room
 
 
 class StartRoom(BaseModel):
@@ -22,14 +22,13 @@ class LeaveRoom(BaseModel):
 
 
 class UserSchema(BaseModel):
+    name: str
+    profile_pic: int
+    is_master: bool
+
+
+class UserDict(dict[str, UserSchema]):
     pass
-    # name: str
-    # profile_pic: int
-    # is_master: bool
-
-
-class UserDict(BaseModel):
-    users: dict[str, UserSchema]
 
 
 class UserList(BaseModel):
@@ -37,13 +36,13 @@ class UserList(BaseModel):
 
 
 class RoomSchema(BaseModel):
-    room_code: str
-    users: UserDict
+    code: str
+    users: dict[str, UserSchema]
     status: RoomStatus
 
 
 class RoomMaster(RoomSchema):
-    master_code: str
+    master_token: str
 
 
 class UserToken(UserSchema):

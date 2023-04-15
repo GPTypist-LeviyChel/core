@@ -1,5 +1,9 @@
+import dataclasses
 import secrets
 from enum import IntEnum
+
+from src.entities.question import Question
+from src.entities.user import User
 
 
 class RoomStatus(IntEnum):
@@ -8,12 +12,12 @@ class RoomStatus(IntEnum):
     FINISHED = 2
 
 
+@dataclasses.dataclass
 class Room:
-    def __init__(self, code: str):
-        self.code = code
-        self.users = {}
-        self.status = RoomStatus.PREPARATION
-        self.master_code = secrets.token_hex(16)
-        self.current_question = -1
-        self.questions = []
-        self.current_answer = None
+    code: str
+    users: dict[str, User] = dataclasses.field(default_factory=lambda: {})
+    status: RoomStatus = RoomStatus.PREPARATION
+    master_token: str = secrets.token_hex(16)
+    current_question: int = -1
+    questions: list[Question] = dataclasses.field(default_factory=lambda: [])
+    current_answer: str | None = None
