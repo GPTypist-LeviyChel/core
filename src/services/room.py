@@ -1,4 +1,3 @@
-import dataclasses
 import random
 import string
 from dataclasses import asdict
@@ -6,11 +5,14 @@ from dataclasses import asdict
 from src.common.result import Result
 from src.entities.room import Room, RoomStatus
 from src.entities.user import User
+from src.schema import make_event, EventType
+from src.services.master import MasterVerifier
 from src.services.token import TokenService
+from src.session.conenctions import Connections
 
 
 class RoomService:
-    def __init__(self, token_service: TokenService):
+    def __init__(self, token_service: TokenService, master_verify: MasterVerifier, connections: Connections):
         self.rooms: dict[str, Room] = {}
         self._codes = set()
 
@@ -21,6 +23,8 @@ class RoomService:
         random.shuffle(self._codes)
 
         self.token_service = token_service
+        self.master_verify = master_verify
+        self.connections = connections
 
     def _gen_room_code(self) -> str:
         return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
@@ -61,6 +65,8 @@ class RoomService:
         room.users[user_name] = User(user_name, profile_pic, is_master=master_token is not None)
         token = master_token or self.token_service.create(user_name)
 
+        self.connections.notify_all(room_code, user_name,
+                                    make_event(EventType.USER_JOINED, {"name": user_name, "profile_pic": profile_pic}))
         return Result.ok({"room": asdict(room), "user": asdict(room.users[user_name]), "token": token})
 
     def leave_room(self, room_code: str, user_name: str) -> Result:
@@ -70,6 +76,14 @@ class RoomService:
 
         if user_name in room.users:
             room.users.pop(user_name)
+
+        self.connections.notify_all(room_code, user_name, make_event(EventType.USER_LEFT, {"name": user_name}))
+
+        if not room.users:
+            self.rooms.pop(room_code)
+            self._codes.append(room_code)
+        elif room.users[user_name].is_master:
+            return self.end_room(room_code)
 
         return Result.ok()
 
@@ -86,6 +100,9 @@ class RoomService:
             return Result.error("Ошибка авторизации")
 
         room.status = RoomStatus.IN_PROGRESS
+
+        self.connections.notify_all(room_code, None, make_event(EventType.GAME_STARTED, {}))
+
         return Result.ok()
 
     def create_room(self, master_name: str) -> Result:
@@ -102,16 +119,23 @@ class RoomService:
         if result.is_error:
             return result
 
+        self.master_verify.set_master(code, master_name)
         self._codes.pop()
 
         return result
 
     def end_room(self, room_code: str) -> Result:
-        room = self.rooms.get(room_code, None)
-        if room is None:
-            return self._bad_room
+        room = self.get_room(room_code)
+        if room.is_error:
+            return room
+
+        room = room.value
 
         self._codes.append(room.code)
+        self.rooms.pop(room_code)
+
+        self.connections.notify_all(room_code, None, make_event(EventType.GAME_ENDED, {}))
+
         return Result.ok()
 
     def get_room(self, room_code: str) -> Result:

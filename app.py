@@ -80,11 +80,11 @@ async def submit_answer(input: SubmitAnswer,
 
 
 @app.websocket('/ws')
-async def websocket_endpoint(websocket: WebSocket,
+async def websocket_endpoint(websocket: WebSocket, room_code: str,
                              token_service: TokenService = Depends(Provide[Container.token_service]),
                              connections: Connections = Depends(Provide[Container.connections])):
     await websocket.accept()
-    connections.add_ws_connection(websocket)
+    connections.add_ws_connection(websocket, room_code)
 
 
 container = Container()

@@ -10,7 +10,7 @@ class TokenService:
         self._tokens[token] = user
         return token
 
-    def get_user(self, token) -> str:
+    def get_user(self, token) -> str | None:
         return self._tokens.get(token, None)
 
     def delete(self, token):
