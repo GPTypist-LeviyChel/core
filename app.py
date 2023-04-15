@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 
@@ -8,7 +9,7 @@ from starlette.websockets import WebSocket
 from src.common.result import Result
 from src.entities.room import Room
 from src.schema import *
-from src.services.answer import AnswerService
+from src.services.master import MasterVerifier
 from src.services.question import QuestionService
 
 # from src.containers import Container
@@ -29,10 +30,11 @@ class Container(DeclarativeContainer):
     # config = Configuration()
     connections = Singleton(Connections)
     token_service = Singleton(TokenService)
-    room_service = Singleton(RoomService, token_service=token_service)
-    question_service = Singleton(QuestionService, room_service=room_service)
-    answer_service = Singleton(AnswerService, room_service=room_service, question_server=question_service,
-                               connections=connections)
+    master_verify = Singleton(MasterVerifier)
+    room_service = Singleton(RoomService, token_service=token_service, master_verify=master_verify,
+                             connections=connections)
+    question_service = Singleton(QuestionService, room_service=room_service, token_service=token_service,
+                                 master_verify=master_verify, connections=connections)
 
 
 app = FastAPI()
@@ -72,19 +74,35 @@ async def start_room(input: StartRoom,
 @inject
 async def submit_answer(input: SubmitAnswer,
                         token_service: TokenService = Depends(Provide[Container.token_service]),
-                        answer_service: AnswerService = Depends(Provide[Container.answer_service])):
+                        question_service: QuestionService = Depends(Provide[Container.question_service])):
     user = token_service.get_user(input.token)
     if user is None:
         return Result.error('Invalid token')
-    return answer_service.submit_answer(input.room_code, input.token, input.answer).response
+    return question_service.submit_answer(input.room_code, input.token, input.answer).response
 
 
 @app.websocket('/ws')
-async def websocket_endpoint(websocket: WebSocket, room_code: str,
+@inject
+async def websocket_endpoint(websocket: WebSocket,
                              token_service: TokenService = Depends(Provide[Container.token_service]),
                              connections: Connections = Depends(Provide[Container.connections])):
     await websocket.accept()
+
+    room_code = websocket.query_params.get('room_code')
     connections.add_ws_connection(websocket, room_code)
+
+    while True:
+        try:
+            data = await websocket.receive_text()
+        except Exception as e:
+            connections.remove_ws_connection(websocket, room_code)
+            return
+        if data == 'exit':
+            connections.remove_ws_connection(websocket, room_code)
+            break
+        else:
+            # sleep for 1 second
+            await asyncio.sleep(1)
 
 
 container = Container()
