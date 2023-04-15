@@ -1,0 +1,19 @@
+# Ignore Python bytecode files
+*.pyc
+
+# Ignore the __pycache__ directory
+__pycache__
+
+# Ignore the .git directory
+.git/
+
+# Ignore any files or directories that are not needed for the application
+*.log
+*.swp
+*.swo
+*.db
+*.sqlite
+*.psd
+node_modules/
+bower_components/
+vendor/
