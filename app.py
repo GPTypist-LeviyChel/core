@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+from ssl import SSLContext, PROTOCOL_TLSv1_2
 
 from fastapi import FastAPI, Depends
 from starlette.middleware.cors import CORSMiddleware
@@ -151,8 +152,10 @@ async def websocket_endpoint(websocket: WebSocket,
 container = Container()
 container.wire(modules=[sys.modules[__name__]])
 
+
+
 if __name__ == "__main__":
     import uvicorn
 
     # start with watch
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, ssl_certfile='fullchain.pem', ssl_keyfile='key.pem')
