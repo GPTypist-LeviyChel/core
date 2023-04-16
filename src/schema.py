@@ -6,6 +6,7 @@ from src.entities.room import RoomStatus, Room
 
 
 class CreateRoom(BaseModel):
+    con_token: str
     master_name: str
     questions_per_user: int
 
@@ -16,13 +17,13 @@ class StartRoom(BaseModel):
 
 
 class JoinRoom(BaseModel):
+    con_token: str
     room_code: str
     user_name: str
 
 
 class LeaveRoom(BaseModel):
-    room_code: str
-    user_name: str
+    con_token: str
 
 
 class UserSchema(BaseModel):

@@ -40,7 +40,7 @@ class RoomService:
             return Result.error("Игра уже закончилась")
         return None
 
-    async def join_room(self, room_code: str, user_name: str, master_token: str = None) -> Result:
+    async def join_room(self, con_token: str, room_code: str, user_name: str, master_token: str = None) -> Result:
         room = self.rooms.get(room_code, None)
         if room is None:
             return self._bad_room
@@ -64,6 +64,7 @@ class RoomService:
 
         room.users[user_name] = User(user_name, 'asdas', is_master=master_token is not None)
         token = master_token or self.token_service.create(user_name)
+        self.connections.associate(con_token, (room.code, user_name))
 
         await self.connections.notify_all(room_code, user_name,
                                           make_event(EventType.USER_JOINED,
@@ -71,7 +72,9 @@ class RoomService:
                                                       "is_master": False}))
         return Result.ok({"room": asdict(room), "user": asdict(room.users[user_name]), "token": token})
 
-    async def leave_room(self, room_code: str, user_name: str) -> Result:
+    async def leave_room(self, con_token: str) -> Result:
+        room_code, user_name = self.connections.get_assoc(con_token) or ("", "")
+
         room = self.rooms.get(room_code, None)
         if room is None:
             return self._bad_room
@@ -108,7 +111,7 @@ class RoomService:
 
         return Result.ok()
 
-    async def create_room(self, master_name: str, questions_per_user: int) -> Result:
+    async def create_room(self, con_token: str, master_name: str, questions_per_user: int) -> Result:
         if not self._codes:
             return Result.error("Пока нет свободных комнат")
 
@@ -125,12 +128,14 @@ class RoomService:
         self.rooms[code] = room
 
         # 0 - master pic
-        result = await self.join_room(code, master_name, master_token=master_token)
+        result = await self.join_room(con_token, code, master_name, master_token=master_token)
         if result.is_error:
             return result
 
         self.master_verify.set_master(code, master_token)
         self._codes.pop()
+
+        self.connections.associate(con_token, (room.code, master_name))
 
         return result
 

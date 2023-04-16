@@ -56,7 +56,7 @@ app.add_middleware(
 @inject
 async def create_room(input: CreateRoom,
                       room_service: RoomService = Depends(Provide[Container.room_service])):
-    result = await room_service.create_room(input.master_name, input.questions_per_user or 1)
+    result = await room_service.create_room(input.con_token, input.master_name, input.questions_per_user or 1)
     return result.response
 
 
@@ -64,7 +64,7 @@ async def create_room(input: CreateRoom,
 @inject
 async def join_room(input: JoinRoom,
                     room_service: RoomService = Depends(Provide[Container.room_service])):
-    result = await room_service.join_room(input.room_code, input.user_name)
+    result = await room_service.join_room(input.con_token, input.room_code, input.user_name)
     return result.response
 
 
@@ -72,7 +72,7 @@ async def join_room(input: JoinRoom,
 @inject
 async def leave_room(input: LeaveRoom,
                      room_service: RoomService = Depends(Provide[Container.room_service])):
-    return (await room_service.leave_room(input.room_code, input.user_name)).response
+    return (await room_service.leave_room(input.con_token)).response
 
 
 @app.post("/rooms/start")
@@ -119,31 +119,23 @@ async def join_room_by_code(room_code: str):
 @app.websocket('/ws')
 @inject
 async def websocket_endpoint(websocket: WebSocket,
-                             token_service: TokenService = Depends(Provide[Container.token_service]),
                              room_service: RoomService = Depends(Provide[Container.room_service]),
                              connections: Connections = Depends(Provide[Container.connections])):
     await websocket.accept()
-    room_code = websocket.query_params.get('room_code')
-    user_name = websocket.query_params.get('user_name')
-    if not room_code or not user_name:
+    token = websocket.query_params.get('token')
+    token = token.strip()
+    if not token:
         await websocket.close()
         return
 
-    room_code = room_code.strip().upper()
-    user_name = user_name.strip()
-
-    if not room_code or not user_name:
-        await websocket.close()
-        return
-
-    connections.add_ws_connection(websocket, room_code)
+    connections.add_ws_connection(websocket, token)
 
     while True:
         try:
             data = await websocket.receive_text()
         except Exception as e:
-            await room_service.leave_room(room_code, user_name)
-            connections.remove_ws_connection(websocket, room_code)
+            await room_service.leave_room(token)
+            connections.remove_ws_connection(websocket, token)
             print('exception', e)
             return
 
@@ -151,8 +143,8 @@ async def websocket_endpoint(websocket: WebSocket,
             await asyncio.sleep(1)
             await websocket.send_json({'type': 0})
         else:
-            await room_service.leave_room(room_code, user_name)
-            connections.remove_ws_connection(websocket, room_code)
+            await room_service.leave_room(token)
+            connections.remove_ws_connection(websocket, token)
             break
 
 
