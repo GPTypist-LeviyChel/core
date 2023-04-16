@@ -57,18 +57,19 @@ class RoomService:
         if not user_name:
             return Result.error("Имя должно быть непустым")
 
-        # TODO: profile_pic
+        if any(not ch.isalnum() for ch in user_name):
+            return Result.error("Такой ник нельзя")
 
         if len(user_name) > 100:
             return Result.error("Имя должно быть не длиннее 100 символов")
 
-        room.users[user_name] = User(user_name, 'asdas', is_master=master_token is not None)
+        room.users[user_name] = User(user_name, 'TODO', is_master=master_token is not None)
         token = master_token or self.token_service.create(user_name)
         self.connections.associate(con_token, (room.code, user_name))
 
         await self.connections.notify_all(room_code, user_name,
                                           make_event(EventType.USER_JOINED,
-                                                     {"name": user_name, "profile_pic": 'asdas',
+                                                     {"name": user_name, "profile_pic": 'TODO',
                                                       "is_master": False}))
         return Result.ok({"room": asdict(room), "user": asdict(room.users[user_name]), "token": token})
 
