@@ -135,6 +135,7 @@ class RoomService:
 
         self.master_verify.set_master(code, master_token)
         self._codes.pop()
+        random.shuffle(self._codes)
 
         self.connections.associate(con_token, (room.code, master_name))
 
@@ -149,6 +150,7 @@ class RoomService:
 
         self._codes.append(room.code)
         self.rooms.pop(room_code)
+        random.shuffle(self._codes)
 
         await self.connections.notify_all(room_code, None, make_event(EventType.GAME_ENDED, {}))
 
