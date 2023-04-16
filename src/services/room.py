@@ -88,7 +88,7 @@ class RoomService:
             if room_code in self.rooms:
                 self.rooms.pop(room_code)
                 self._codes.append(room_code)
-        elif room.users[user_name].is_master:
+        elif room.users or user_name in room.users and room.users[user_name].is_master:
             return await self.end_room(room_code)
 
         return Result.ok()

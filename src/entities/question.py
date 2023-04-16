@@ -12,4 +12,5 @@ class QuestionType(IntEnum):
 class Question:
     question: str
     type: QuestionType
+    image_url: str
     answers: list[str] | None = None

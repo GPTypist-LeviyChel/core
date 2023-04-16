@@ -1,6 +1,9 @@
 import dataclasses
 import random
 import string
+from urllib import request
+
+import requests as requests
 
 from src.common.result import Result
 from src.entities.question import Question, QuestionType
@@ -31,13 +34,18 @@ class QuestionService:
             return room
 
         room = room.value
-        room.questions_per_user = 5
-        room.questions = [Question(''.join(random.choices(string.ascii_uppercase + string.digits, k=10)),
-                                   QuestionType.MULTIPLE_CHOICE, ['a', 'b', 'c', 'd'])
-                          for _ in range(len(room.users) * room.questions_per_user)]
+        try:
+            response = requests.get(
+                f'http://scrum.mom:7040/api/v1/getQuestions/{(len(room.users) - 1) * room.questions_per_user}')
+            body = response.json()
+            room.questions = [Question(question=obj['text'], image_url=obj['image_url'], type=QuestionType.SHORT_ANSWER) for
+                         obj in body]
+        except:
+            return Result.error("Cannot fetch questions")
+
         room.current_question = -1
 
-        user_names = list(room.users.keys()) * room.questions_per_user
+        user_names = [k for k, v in room.users.items() if not v.is_master] * room.questions_per_user
 
         while True:
             random.shuffle(user_names)
@@ -75,6 +83,7 @@ class QuestionService:
         await self.connections.notify_all(room_code, None, make_event(EventType.NEXT_QUESTION,
                                                                       {'question': question.question,
                                                                        "question_type": question.type,
+                                                                       "image_url": question.image_url,
                                                                        "answers": question.answers,
                                                                        "answerer": self._orders[room_code][
                                                                            room.current_question]}))
