@@ -42,7 +42,7 @@ class Container(DeclarativeContainer):
 
 app = FastAPI()
 
-origins = ["*"]
+origins = ["https://scrum.mom"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -158,4 +158,4 @@ if __name__ == "__main__":
     import uvicorn
 
     # start with watch
-    uvicorn.run(app, host="0.0.0.0", port=8000, ssl_certfile='fullchain.pem', ssl_keyfile='key.pem')
+    uvicorn.run(app, host="0.0.0.0", port=8001, ssl_certfile='fullchain.pem', ssl_keyfile='key.pem')
