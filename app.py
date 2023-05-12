@@ -42,7 +42,7 @@ class Container(DeclarativeContainer):
 
 app = FastAPI()
 
-origins = ["https://scrum.mom"]
+origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,

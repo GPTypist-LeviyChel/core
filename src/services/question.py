@@ -36,7 +36,7 @@ class QuestionService:
         room = room.value
         try:
             response = requests.get(
-                f'http://scrum.mom:7040/api/v1/getQuestions/{(len(room.users) - 1) * room.questions_per_user}')
+                f'http://localhost:7040/api/v1/getQuestions/{(len(room.users) - 1) * room.questions_per_user}')
             body = response.json()
             room.questions = [Question(question=obj['text'], image_url=obj['image_url'], type=QuestionType.SHORT_ANSWER) for
                          obj in body]
